@@ -9,22 +9,33 @@ export function Logo() {
   };
 
   return (
-    <div className="flex items-center space-x-3">
+    <div className="flex items-center gap-3">
       <button 
         onClick={toggleGlow}
-        className="focus:outline-none"
+        className="focus:outline-none relative"
         data-testid="button-logo-toggle"
+        aria-label="Toggle logo glow"
       >
+        <div className={`absolute inset-0 rounded-full transition-all duration-500 ${
+          isGlowing ? 'bg-primary/20 blur-xl scale-150' : 'bg-transparent'
+        }`} />
         <Dumbbell 
-          className={`text-3xl transition-all duration-300 ${
+          className={`relative transition-all duration-500 ${
             isGlowing 
               ? 'text-primary logo-glow' 
-              : 'text-primary logo-dim'
+              : 'text-muted-foreground logo-dim'
           }`}
           size={32}
         />
       </button>
-      <h1 className="text-2xl font-bold text-white">Lendanfit</h1>
+      <div className="flex flex-col">
+        <h1 className="text-xl sm:text-2xl font-black tracking-tight text-foreground leading-none">
+          Lendanfit
+        </h1>
+        <span className="text-[10px] sm:text-xs font-medium text-primary tracking-widest uppercase">
+          Tu Plan Fitness
+        </span>
+      </div>
     </div>
   );
 }

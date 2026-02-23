@@ -1,5 +1,7 @@
 export interface UserData {
   age: number;
+  weight: number;
+  height: number;
   stepsLevel: 'basic' | 'medium' | 'advanced';
   healthStatus: 'excellent' | 'average' | 'needs-improvement';
   mainObjective: 'reduce-stress' | 'gain-muscle' | 'improve-resistance' | 'lose-weight' | 'improve-flexibility' | 'general-health';

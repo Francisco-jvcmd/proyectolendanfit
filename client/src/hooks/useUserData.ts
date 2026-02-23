@@ -3,6 +3,8 @@ import { UserData } from '@/types';
 
 const defaultUserData: UserData = {
   age: 25,
+  weight: 70,
+  height: 170,
   stepsLevel: 'medium',
   healthStatus: 'average',
   mainObjective: 'improve-resistance'
