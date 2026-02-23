@@ -7,11 +7,27 @@ export interface UserData {
   mainObjective: 'reduce-stress' | 'gain-muscle' | 'improve-resistance' | 'lose-weight' | 'improve-flexibility' | 'general-health';
 }
 
+export interface ExerciseStep {
+  step: number;
+  instruction: string;
+  duration?: string;
+  tip?: string;
+}
+
 export interface Exercise {
   name: string;
   description: string;
   duration: string;
   frequency: string;
+  muscleGroup: string;
+  sets: number;
+  reps: string;
+  restBetweenSets: string;
+  tempoSeconds: string;
+  difficulty: 'facil' | 'moderado' | 'intenso';
+  steps: ExerciseStep[];
+  benefits: string[];
+  commonMistakes: string[];
 }
 
 export interface NutritionRecommendation {
