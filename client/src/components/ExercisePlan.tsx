@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Download, Play, Pause, RotateCcw, Clock, Zap, CalendarDays, ChevronRight, Target, Repeat, Timer, AlertTriangle, CheckCircle2, Dumbbell, Heart, ArrowRight, X } from 'lucide-react';
+import { Download, Play, Pause, RotateCcw, Clock, Zap, CalendarDays, ChevronRight, Target, Repeat, Timer, AlertTriangle, CheckCircle2, Dumbbell, Heart, ArrowRight, X, Volume2, VolumeX, Trophy, SkipForward } from 'lucide-react';
 import { UserData, Exercise, ExerciseStep } from '@/types';
 import { exerciseData } from '@/data/exerciseData';
 import { PDFGenerator } from './PDFGenerator';
@@ -622,12 +622,307 @@ function ExerciseGuideModal({ exercise, isOpen, onClose }: { exercise: Exercise 
 }
 
 /* ------------------------------------------------------------------ */
+/*  Workout Mode - Full Guided Workout Session                          */
+/* ------------------------------------------------------------------ */
+function WorkoutMode({ exercises, onClose }: { exercises: Exercise[]; onClose: () => void }) {
+  const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
+  const [currentSet, setCurrentSet] = useState(1);
+  const [phase, setPhase] = useState<'exercise' | 'rest' | 'complete'>('exercise');
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [isRunning, setIsRunning] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [completedExercises, setCompletedExercises] = useState<number[]>([]);
+
+  const currentExercise = exercises[currentExerciseIndex];
+  const totalExercises = exercises.length;
+  const totalSets = currentExercise?.sets || 3;
+
+  // Parse rest time from exercise data
+  const getRestSeconds = (restStr: string): number => {
+    const match = restStr.match(/(\d+)/);
+    return match ? parseInt(match[1], 10) : 45;
+  };
+
+  // Play sound notification
+  const playSound = useCallback((type: 'beep' | 'complete') => {
+    if (!soundEnabled) return;
+    const audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    oscillator.frequency.value = type === 'complete' ? 800 : 600;
+    oscillator.type = 'sine';
+    gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+    oscillator.start(audioCtx.currentTime);
+    oscillator.stop(audioCtx.currentTime + 0.3);
+  }, [soundEnabled]);
+
+  // Timer countdown
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    if (isRunning && timeLeft > 0) {
+      interval = setInterval(() => {
+        setTimeLeft(prev => {
+          if (prev <= 1) {
+            playSound('beep');
+            return 0;
+          }
+          if (prev === 4) playSound('beep'); // Warning beep at 3 seconds
+          return prev - 1;
+        });
+      }, 1000);
+    } else if (isRunning && timeLeft === 0 && phase === 'rest') {
+      // Rest finished, move to next set or exercise
+      if (currentSet < totalSets) {
+        setCurrentSet(prev => prev + 1);
+        setPhase('exercise');
+      } else {
+        // Mark exercise complete
+        setCompletedExercises(prev => [...prev, currentExerciseIndex]);
+        if (currentExerciseIndex < totalExercises - 1) {
+          setCurrentExerciseIndex(prev => prev + 1);
+          setCurrentSet(1);
+          setPhase('exercise');
+        } else {
+          setPhase('complete');
+          playSound('complete');
+        }
+      }
+      setIsRunning(false);
+    }
+    return () => clearInterval(interval);
+  }, [isRunning, timeLeft, phase, currentSet, totalSets, currentExerciseIndex, totalExercises, playSound]);
+
+  // Start rest timer
+  const startRest = () => {
+    const restTime = getRestSeconds(currentExercise.restBetweenSets);
+    setTimeLeft(restTime);
+    setPhase('rest');
+    setIsRunning(true);
+  };
+
+  // Skip to next exercise
+  const skipExercise = () => {
+    if (currentExerciseIndex < totalExercises - 1) {
+      setCompletedExercises(prev => [...prev, currentExerciseIndex]);
+      setCurrentExerciseIndex(prev => prev + 1);
+      setCurrentSet(1);
+      setPhase('exercise');
+      setIsRunning(false);
+    } else {
+      setPhase('complete');
+    }
+  };
+
+  const formatTime = (s: number) => {
+    const mins = Math.floor(s / 60);
+    const secs = s % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const progressPercent = ((currentExerciseIndex + (currentSet / totalSets)) / totalExercises) * 100;
+
+  if (phase === 'complete') {
+    return (
+      <Dialog open={true} onOpenChange={onClose}>
+        <DialogContent className="bg-card border-border max-w-md p-0">
+          <div className="p-8 text-center">
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', duration: 0.6 }}
+              className="w-24 h-24 mx-auto mb-6 rounded-full bg-gradient-to-br from-primary to-emerald-400 flex items-center justify-center"
+            >
+              <Trophy size={48} className="text-primary-foreground" />
+            </motion.div>
+            <h2 className="text-2xl font-black text-foreground mb-2">Entrenamiento Completado</h2>
+            <p className="text-muted-foreground mb-6">
+              Has completado {completedExercises.length} ejercicios. Excelente trabajo!
+            </p>
+            <Button onClick={onClose} className="w-full bg-primary hover:bg-primary/80 text-primary-foreground font-bold">
+              Finalizar Sesion
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  return (
+    <Dialog open={true} onOpenChange={onClose}>
+      <DialogContent className="bg-card border-border max-w-lg p-0 max-h-[90vh] overflow-hidden">
+        <ScrollArea className="max-h-[90vh]">
+          <div className="p-4 sm:p-6">
+            {/* Header with progress */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Dumbbell size={18} className="text-primary" />
+                <span className="font-bold text-foreground text-sm">Modo Entrenamiento</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSoundEnabled(!soundEnabled)}
+                  className="p-1.5 rounded-lg bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+                </button>
+                <Button variant="ghost" size="sm" onClick={onClose} className="text-muted-foreground hover:text-foreground">
+                  <X size={18} />
+                </Button>
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs text-muted-foreground">
+                  Ejercicio {currentExerciseIndex + 1} de {totalExercises}
+                </span>
+                <span className="text-xs text-primary font-bold">{Math.round(progressPercent)}%</span>
+              </div>
+              <Progress value={progressPercent} className="h-2" />
+            </div>
+
+            {/* Exercise indicator dots */}
+            <div className="flex gap-1.5 justify-center mb-5">
+              {exercises.map((_, i) => (
+                <div
+                  key={i}
+                  className={`w-2.5 h-2.5 rounded-full transition-all ${
+                    completedExercises.includes(i) ? 'bg-emerald-400' :
+                    i === currentExerciseIndex ? 'bg-primary w-6' : 'bg-muted-foreground/20'
+                  }`}
+                />
+              ))}
+            </div>
+
+            {phase === 'rest' ? (
+              /* Rest Phase UI */
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="text-center py-6"
+              >
+                <div className="w-32 h-32 mx-auto mb-4 relative">
+                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="45" fill="none" stroke="hsl(220, 16%, 18%)" strokeWidth="6" />
+                    <circle
+                      cx="50" cy="50" r="45" fill="none"
+                      stroke="hsl(172, 100%, 41%)"
+                      strokeWidth="6"
+                      strokeLinecap="round"
+                      strokeDasharray={2 * Math.PI * 45}
+                      strokeDashoffset={2 * Math.PI * 45 * (1 - timeLeft / getRestSeconds(currentExercise.restBetweenSets))}
+                      className="transition-all duration-1000 ease-linear"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-3xl font-black text-foreground">{formatTime(timeLeft)}</span>
+                    <span className="text-xs text-muted-foreground">Descanso</span>
+                  </div>
+                </div>
+                <h3 className="text-lg font-bold text-foreground mb-1">Descansa</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Siguiente: Serie {currentSet < totalSets ? currentSet + 1 : 1} de {currentExercise.name}
+                </p>
+                <div className="flex gap-2 justify-center">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { setIsRunning(false); setPhase('exercise'); }}
+                    className="text-muted-foreground"
+                  >
+                    Saltar Descanso
+                  </Button>
+                </div>
+              </motion.div>
+            ) : (
+              /* Exercise Phase UI */
+              <motion.div
+                key={currentExerciseIndex}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+              >
+                {/* Exercise animation preview */}
+                <div className="bg-muted/30 rounded-2xl p-4 mb-4">
+                  <ExerciseFigure exerciseName={currentExercise.name} isAnimating={true} />
+                </div>
+
+                {/* Exercise info */}
+                <div className="text-center mb-4">
+                  <h3 className="text-xl font-black text-foreground mb-1">{currentExercise.name}</h3>
+                  <p className="text-sm text-muted-foreground">{currentExercise.muscleGroup}</p>
+                </div>
+
+                {/* Current set indicator */}
+                <div className="flex items-center justify-center gap-3 mb-5">
+                  <Badge className="bg-primary/10 text-primary border-primary/20 font-bold">
+                    Serie {currentSet} de {totalSets}
+                  </Badge>
+                  <Badge variant="outline" className="text-muted-foreground border-border">
+                    {currentExercise.reps}
+                  </Badge>
+                </div>
+
+                {/* Tempo reminder */}
+                <div className="bg-muted/30 rounded-lg p-3 mb-5 text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Tempo por repeticion:</p>
+                  <p className="text-sm font-bold text-primary">{currentExercise.tempoSeconds}</p>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex gap-3">
+                  <Button
+                    onClick={skipExercise}
+                    variant="ghost"
+                    className="flex-1 text-muted-foreground"
+                  >
+                    <SkipForward size={16} className="mr-1.5" />
+                    Saltar
+                  </Button>
+                  <Button
+                    onClick={startRest}
+                    className="flex-1 bg-primary hover:bg-primary/80 text-primary-foreground font-bold"
+                  >
+                    <CheckCircle2 size={16} className="mr-1.5" />
+                    Serie Completada
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Quick stats */}
+            <div className="mt-5 pt-4 border-t border-border/50 grid grid-cols-3 gap-3 text-center">
+              <div>
+                <p className="text-lg font-black text-foreground">{completedExercises.length}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Completados</p>
+              </div>
+              <div>
+                <p className="text-lg font-black text-primary">{currentSet}/{totalSets}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Serie Actual</p>
+              </div>
+              <div>
+                <p className="text-lg font-black text-foreground">{totalExercises - currentExerciseIndex - 1}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Restantes</p>
+              </div>
+            </div>
+          </div>
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Main ExercisePlan Component                                         */
 /* ------------------------------------------------------------------ */
 export function ExercisePlan({ userData }: ExercisePlanProps) {
   const [selectedMonth, setSelectedMonth] = useState(1);
   const [showPDFGenerator, setShowPDFGenerator] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+  const [showWorkoutMode, setShowWorkoutMode] = useState(false);
 
   const currentExercises = exerciseData[userData.stepsLevel][selectedMonth] || exerciseData[userData.stepsLevel][1];
 
@@ -660,13 +955,23 @@ export function ExercisePlan({ userData }: ExercisePlanProps) {
                 Nivel {levelLabels[userData.stepsLevel]} - Ejercicios Reales con Guia Paso a Paso
               </p>
             </div>
-            <Button
-              onClick={() => setShowPDFGenerator(true)}
-              className="bg-primary hover:bg-primary/80 text-primary-foreground font-bold py-2.5 px-5 w-full sm:w-auto"
-            >
-              <Download className="mr-2" size={16} />
-              Descargar PDF
-            </Button>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <Button
+                onClick={() => setShowWorkoutMode(true)}
+                className="bg-secondary hover:bg-secondary/80 text-secondary-foreground font-bold py-2.5 px-4 flex-1 sm:flex-none"
+              >
+                <Play className="mr-1.5" size={16} />
+                Entrenar
+              </Button>
+              <Button
+                onClick={() => setShowPDFGenerator(true)}
+                variant="outline"
+                className="border-border hover:bg-muted text-foreground font-bold py-2.5 px-4 flex-1 sm:flex-none"
+              >
+                <Download className="mr-1.5" size={16} />
+                PDF
+              </Button>
+            </div>
           </div>
 
           {/* Month Tabs */}
@@ -801,6 +1106,10 @@ export function ExercisePlan({ userData }: ExercisePlanProps) {
 
       {showPDFGenerator && (
         <PDFGenerator userData={userData} onClose={() => setShowPDFGenerator(false)} />
+      )}
+
+      {showWorkoutMode && (
+        <WorkoutMode exercises={currentExercises} onClose={() => setShowWorkoutMode(false)} />
       )}
     </>
   );
